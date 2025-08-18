@@ -54,6 +54,9 @@ param queuePrivateDnsZoneResourceId string = ''
 @description('Optional existing Private DNS zone resource ID for table (privatelink.table.*). If empty, a zone will be created and linked to the provided VNet')
 param tablePrivateDnsZoneResourceId string = ''
 
+@description('Skip creating a VNet link for the blob private DNS zone (use when parent deployment already created and linked zone)')
+param skipBlobDnsLink bool = false
+
 // additionalAppSettings is already an object map; we'll merge it directly in the child config
 
 // Storage name (generated if not provided). Include Logic App name for readability and add deterministic suffix for uniqueness
@@ -153,7 +156,7 @@ resource dnsZones 'Microsoft.Network/privateDnsZones@2020-06-01' = [for s in sto
 }]
 
 // Create or update VNet links for each zone (works for existing zones too)
-resource dnsLinks 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = [for (s, i) in storageServices: {
+resource dnsLinks 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = [for (s, i) in storageServices: if (!(skipBlobDnsLink && s.key == 'blob' && !empty(s.zoneParam))) {
   name: '${empty(s.zoneParam) ? dnsZones[i].name : format('privatelink.{0}.{1}', s.key, storageSuffix)}/link-${s.key}-${shortSuffix}'
   // Fix concatenation using interpolation to satisfy Bicep type system
   // (Original attempted '+' concatenation on union type)

@@ -316,6 +316,8 @@ module logicApp 'modules/logicappStandard.bicep' = {
     vnetResourceId: (!empty(logicAppVnetResourceId) ? logicAppVnetResourceId : effectiveVnetId)
     storagePrivateEndpointSubnetResourceId: (!empty(logicAppStoragePrivateEndpointSubnetResourceId) ? logicAppStoragePrivateEndpointSubnetResourceId : effectivePeSubnetId)
     blobPrivateDnsZoneResourceId: effectiveSharedBlobDnsZoneResourceId
+  // Skip blob DNS VNet link in module when base created & linked shared zone this deployment
+  skipBlobDnsLink: (shouldCreateSharedBlobDnsZone && empty(sharedBlobPrivateDnsZoneResourceId))
     storageAccountName: logicAppStorageAccountName
     fileShareName: logicAppFileShareName
     applicationInsightsConnectionString: logicAppApplicationInsightsConnectionString
