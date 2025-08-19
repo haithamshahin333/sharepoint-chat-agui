@@ -1,0 +1,14 @@
+# Do not include azure-functions-worker in this file
+# The Python Worker is managed by the Azure Functions platform
+# Manually managing azure-functions-worker may cause unexpected issues
+
+azure-functions
+azure-ai-documentintelligence>=1.0.2
+azure-identity>=1.15.0
+tiktoken
+
+# LangChain dependencies for document analysis
+langchain==0.3.27
+langchain-openai==0.3.28
+langchain-text-splitters==0.3.9
+azure-search-documents>=11.5.3
