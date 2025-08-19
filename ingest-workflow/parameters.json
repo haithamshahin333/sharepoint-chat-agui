@@ -1,0 +1,51 @@
+{
+  "blob_container_name": {
+    "type": "String",
+    "value": "sharepoint-mirror"
+  },
+  "chunk_index": {
+    "type": "String",
+    "value": "chunk"
+  },
+  "search_endpoint": {
+    "type": "String",
+    "value": "https://SEARCHNAME.search.windows.net"
+  },
+  "semantic-config": {
+    "type": "String",
+    "value": "semantic-config"
+  },
+  "sharepoint_category_folders": {
+    "type": "Array",
+    "value": [
+      {
+        "category": "hardcoded-category",
+        "folder": "folder/name"
+      }
+    ]
+  },
+  "sharepoint_document_library": {
+    "type": "String",
+    "value": "Documents"
+  },
+  "sharepoint_site_address": {
+    "type": "String",
+    "value": "https://ORG.sharepoint.com/sites/SITENAME"
+  },
+  "storage_account_name": {
+    "type": "String",
+    "value": "STGNAME"
+  },
+  "cosmos_database_name": {
+    "type": "String",
+    "value": "MainDatabase"
+  },
+  "cosmos_container_name": {
+    "type": "String",
+    "value": "Documents"
+  },
+  "embedding-deployment": {
+    "type": "String",
+    "value": "text-embedding-ada-002"
+  }
+}

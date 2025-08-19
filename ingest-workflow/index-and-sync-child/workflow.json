@@ -1,0 +1,553 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "actions": {
+      "Response": {
+        "type": "Response",
+        "kind": "Http",
+        "inputs": {
+          "statusCode": 200
+        },
+        "runAfter": {
+          "Create_or_update_item": [
+            "SUCCEEDED"
+          ]
+        },
+        "operationOptions": "Asynchronous"
+      },
+      "Generate_Embeddings": {
+        "type": "Scope",
+        "actions": {
+          "Until": {
+            "type": "Until",
+            "expression": "@or(greater(variables('BatchEmbeddingIndex'), variables('MaxBatchIndex')), variables('HasError'))",
+            "limit": {
+              "count": 1000,
+              "timeout": "PT1H"
+            },
+            "actions": {
+              "Filter_array": {
+                "type": "Query",
+                "inputs": {
+                  "from": "@body('Parse_Function_Response')?['pages']",
+                  "where": "@equals(item()['batch_index'], variables('BatchEmbeddingIndex'))"
+                }
+              },
+              "Get_multiple_embeddings": {
+                "type": "ServiceProvider",
+                "inputs": {
+                  "parameters": {
+                    "deploymentId": "@parameters('embedding-deployment')",
+                    "input": "@body('Select_Content_to_Embed')"
+                  },
+                  "serviceProviderConfiguration": {
+                    "connectionName": "openai",
+                    "operationId": "getArrayEmbeddings",
+                    "serviceProviderId": "/serviceProviders/openai"
+                  }
+                },
+                "runAfter": {
+                  "Select_Content_to_Embed": [
+                    "SUCCEEDED"
+                  ]
+                }
+              },
+              "Select_Content_to_Embed": {
+                "type": "Select",
+                "inputs": {
+                  "from": "@body('Filter_array')",
+                  "select": "@item()['markdown_content']"
+                },
+                "runAfter": {
+                  "Filter_array": [
+                    "SUCCEEDED"
+                  ]
+                }
+              },
+              "Increment_variable": {
+                "type": "IncrementVariable",
+                "inputs": {
+                  "name": "BatchEmbeddingIndex",
+                  "value": 1
+                },
+                "runAfter": {
+                  "Call_POST_index": [
+                    "SUCCEEDED"
+                  ]
+                }
+              },
+              "Compose_Index_Documents": {
+                "type": "Select",
+                "inputs": {
+                  "from": "@range(0,length(body('Filter_array')))",
+                  "select": {
+                    "id": "@body('Filter_array')[item()]['document_id']",
+                    "content": "@body('Filter_array')[item()]['markdown_content']",
+                    "page_number": "@body('Filter_array')[item()]['page_number']",
+                    "vector": "@body('Get_multiple_embeddings')['embeddings'][item()]",
+                    "category": "@triggerBody()?['category']",
+                    "inserted_date": "@utcNow()",
+                    "published_date": "@body('Parse_Function_Response')?['document_summary']?['published_date']",
+                    "topics": "@body('Parse_Function_Response')?['document_summary']?['key_topics']",
+                    "parent_document_id": "@body('Parse_Document_ID_Output')?['base_document_id']",
+                    "blob_storage_url": "@outputs('Compose_BlobUrl')",
+                    "sharepoint_storage_url": "@body('Get_file_properties')?['{Link}']"
+                  }
+                },
+                "runAfter": {
+                  "Get_multiple_embeddings": [
+                    "SUCCEEDED"
+                  ]
+                }
+              },
+              "Select_Chunk_IDs": {
+                "type": "Select",
+                "inputs": {
+                  "from": "@body('Compose_Index_Documents')",
+                  "select": "@item()['id']"
+                },
+                "runAfter": {
+                  "Increment_variable": [
+                    "SUCCEEDED"
+                  ]
+                }
+              },
+              "Set_variable": {
+                "type": "SetVariable",
+                "inputs": {
+                  "name": "Chunk_Ids",
+                  "value": "@outputs('Union_Chunk_IDs')"
+                },
+                "runAfter": {
+                  "Union_Chunk_IDs": [
+                    "SUCCEEDED"
+                  ]
+                }
+              },
+              "Union_Chunk_IDs": {
+                "type": "Compose",
+                "inputs": "@union(variables('Chunk_Ids'),body('Select_Chunk_IDs'))",
+                "runAfter": {
+                  "Select_Chunk_IDs": [
+                    "SUCCEEDED"
+                  ]
+                }
+              },
+              "Call_POST_index": {
+                "type": "Function",
+                "inputs": {
+                  "method": "POST",
+                  "body": "@body('Compose_Index_Documents')",
+                  "function": {
+                    "connectionName": "azureFunctionOperation-index"
+                  }
+                },
+                "runAfter": {
+                  "Compose_Index_Documents": [
+                    "SUCCEEDED"
+                  ]
+                }
+              },
+              "Set_Error_if_Embedding_Fails": {
+                "type": "SetVariable",
+                "inputs": {
+                  "name": "HasError",
+                  "value": true
+                },
+                "runAfter": {
+                  "Get_multiple_embeddings": [
+                    "TIMEDOUT",
+                    "SKIPPED",
+                    "FAILED"
+                  ]
+                }
+              },
+              "Set_Error_if_Index_Fails": {
+                "type": "SetVariable",
+                "inputs": {
+                  "name": "HasError",
+                  "value": true
+                },
+                "runAfter": {
+                  "Call_POST_index": [
+                    "TIMEDOUT",
+                    "SKIPPED",
+                    "FAILED"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Initialize_Embedding_Variables": [
+            "SUCCEEDED"
+          ]
+        }
+      },
+      "Initialize_Embedding_Variables": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "BatchEmbeddingIndex",
+              "type": "integer",
+              "value": 0
+            },
+            {
+              "name": "MaxBatchIndex",
+              "type": "integer",
+              "value": "@max(body('Select_Embedding_Batch_Indexes'))"
+            },
+            {
+              "name": "Chunk_Ids",
+              "type": "array",
+              "value": []
+            },
+            {
+              "name": "HasError",
+              "type": "boolean",
+              "value": false
+            }
+          ]
+        },
+        "runAfter": {
+          "Select_Embedding_Batch_Indexes": [
+            "SUCCEEDED"
+          ]
+        }
+      },
+      "Initialize_Document_Data": {
+        "type": "Scope",
+        "actions": {
+          "Compose_BlobUrl": {
+            "type": "Compose",
+            "inputs": "https://@{parameters('storage_account_name')}.blob.core.windows.net/@{parameters('blob_container_name')}/@{triggerBody()?['fullpath']}"
+          },
+          "Generate_Document_ID": {
+            "type": "Function",
+            "inputs": {
+              "method": "POST",
+              "body": {
+                "source_url": "@outputs('Compose_BlobUrl')"
+              },
+              "function": {
+                "connectionName": "azureFunctionOperation-generate-id"
+              }
+            },
+            "runAfter": {
+              "Compose_BlobUrl": [
+                "SUCCEEDED"
+              ]
+            }
+          },
+          "Get_file_metadata": {
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "referenceName": "sharepointonline"
+                }
+              },
+              "method": "get",
+              "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharepoint_site_address')))}/files/@{encodeURIComponent(triggerBody()?['identifier'])}"
+            },
+            "runAfter": {
+              "Parse_Document_ID_Output": [
+                "SUCCEEDED"
+              ]
+            }
+          },
+          "Get_file_properties": {
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "referenceName": "sharepointonline"
+                }
+              },
+              "method": "get",
+              "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharepoint_site_address')))}/tables/@{encodeURIComponent(encodeURIComponent(parameters('sharepoint_document_library')))}/items/@{encodeURIComponent(body('Get_file_metadata')?['ItemId'])}/getfileitem"
+            },
+            "runAfter": {
+              "Get_file_metadata": [
+                "SUCCEEDED"
+              ]
+            }
+          },
+          "Get_file_content": {
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "referenceName": "sharepointonline"
+                }
+              },
+              "method": "get",
+              "path": "/datasets/@{encodeURIComponent(encodeURIComponent(parameters('sharepoint_site_address')))}/files/@{encodeURIComponent(triggerBody()?['identifier'])}/content",
+              "queries": {
+                "inferContentType": true
+              }
+            },
+            "runAfter": {
+              "Get_file_properties": [
+                "SUCCEEDED"
+              ]
+            }
+          },
+          "Parse_Document_ID_Output": {
+            "type": "ParseJson",
+            "inputs": {
+              "content": "@body('Generate_Document_ID')",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "base_document_id": {
+                    "type": "string"
+                  },
+                  "source_url": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "runAfter": {
+              "Generate_Document_ID": [
+                "SUCCEEDED"
+              ]
+            }
+          }
+        },
+        "runAfter": {}
+      },
+      "Create_or_update_item": {
+        "type": "ServiceProvider",
+        "inputs": {
+          "parameters": {
+            "databaseId": "@parameters('cosmos_database_name')",
+            "containerId": "@parameters('cosmos_container_name')",
+            "item": "{\n\"id\": \"@{body('Parse_Document_ID_Output')?['base_document_id']}\",\n\"chunk_ids\": @{variables('Chunk_Ids')},\n\"sharepoint_url\": \"@{body('Get_file_properties')?['{Link}']}\",\n\"storage_url\": \"@{outputs('Compose_BlobUrl')}\",\n\"published_date\": \"@{body('Parse_Function_Response')?['document_summary']?['published_date']}\",\n\"inserted\": \"@{utcNow()}\",\n\"topics\": @{body('Parse_Function_Response')?['document_summary']?['key_topics']},\n\"summary\": \"@{body('Parse_Function_Response')?['document_summary']?['summary']}\"\n}",
+            "isUpsert": true
+          },
+          "serviceProviderConfiguration": {
+            "connectionName": "AzureCosmosDB",
+            "operationId": "CreateOrUpdateDocument",
+            "serviceProviderId": "/serviceProviders/AzureCosmosDB"
+          }
+        },
+        "runAfter": {
+          "Create_Blob_with_Metadata": [
+            "SUCCEEDED"
+          ]
+        }
+      },
+      "Generate_Chunked_Markdown": {
+        "type": "Scope",
+        "actions": {
+          "Get_Chunked_Markdown_with_Token_Counts": {
+            "type": "Function",
+            "inputs": {
+              "method": "POST",
+              "body": "@body('Get_file_content')",
+              "headers": {
+                "Content-Type": "application/octet-stream"
+              },
+              "queries": {
+                "source_url": "@outputs('Compose_BlobUrl')"
+              },
+              "function": {
+                "connectionName": "azureFunctionOperation"
+              }
+            }
+          },
+          "Parse_Function_Response": {
+            "type": "ParseJson",
+            "inputs": {
+              "content": "@body('Get_Chunked_Markdown_with_Token_Counts')",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "document_summary": {
+                    "type": "object",
+                    "properties": {
+                      "total_pages": {
+                        "type": "integer"
+                      },
+                      "total_tokens": {
+                        "type": "integer"
+                      },
+                      "summary": {
+                        "type": "string"
+                      },
+                      "key_topics": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "document_type": {
+                        "type": "string"
+                      },
+                      "published_date": {
+                        "type": "string"
+                      },
+                      "analysis_status": {
+                        "type": "string"
+                      },
+                      "base_document_id": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "pages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "document_id": {
+                          "type": "string"
+                        },
+                        "page_number": {
+                          "type": "integer"
+                        },
+                        "markdown_content": {
+                          "type": "string"
+                        },
+                        "token_count": {
+                          "type": "integer"
+                        },
+                        "batch_index": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "document_id",
+                        "page_number",
+                        "markdown_content",
+                        "token_count",
+                        "batch_index"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "runAfter": {
+              "Get_Chunked_Markdown_with_Token_Counts": [
+                "SUCCEEDED"
+              ]
+            }
+          }
+        },
+        "runAfter": {
+          "Initialize_Document_Data": [
+            "SUCCEEDED"
+          ]
+        }
+      },
+      "Select_Embedding_Batch_Indexes": {
+        "type": "Select",
+        "inputs": {
+          "from": "@body('Parse_Function_Response')?['pages']",
+          "select": "@item()['batch_index']"
+        },
+        "runAfter": {
+          "Generate_Chunked_Markdown": [
+            "SUCCEEDED"
+          ]
+        }
+      },
+      "Create_Blob_with_Metadata": {
+        "type": "Scope",
+        "actions": {
+          "Create_Blob": {
+            "type": "ServiceProvider",
+            "inputs": {
+              "parameters": {
+                "containerName": "@parameters('blob_container_name')",
+                "blobName": "@triggerBody()?['fullpath']",
+                "content": "@body('Get_file_content')",
+                "overrideIfExists": "true"
+              },
+              "serviceProviderConfiguration": {
+                "connectionName": "AzureBlob",
+                "operationId": "uploadBlob",
+                "serviceProviderId": "/serviceProviders/AzureBlob"
+              }
+            }
+          },
+          "Add_Metadata_to_Blob": {
+            "type": "Http",
+            "inputs": {
+              "uri": "@{outputs('Compose_BlobUrl')}",
+              "method": "PUT",
+              "headers": {
+                "x-ms-date": "@{utcNow('R')}",
+                "x-ms-version": "2025-05-05",
+                "x-ms-meta-category": "@{triggerBody()?['category']}",
+                "x-ms-meta-sharepointlink": "@{encodeUriComponent(body('Get_file_properties')?['{Link}'])}",
+                "x-ms-meta-docid": "@{body('Parse_Document_ID_Output')?['base_document_id']}"
+              },
+              "queries": {
+                "comp": "metadata"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://storage.azure.com/"
+              }
+            },
+            "runAfter": {
+              "Create_Blob": [
+                "SUCCEEDED"
+              ]
+            },
+            "runtimeConfiguration": {
+              "contentTransfer": {
+                "transferMode": "Chunked"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Generate_Embeddings": [
+            "SUCCEEDED"
+          ]
+        }
+      }
+    },
+    "contentVersion": "1.0.0.0",
+    "outputs": {},
+    "triggers": {
+      "When_a_HTTP_request_is_received": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "method": "POST",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "identifier": {
+                "type": "string"
+              },
+              "fullpath": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "correlation": {
+          "clientTrackingId": "@{triggerBody()?['fullpath']}"
+        },
+        "runtimeConfiguration": {
+          "concurrency": {
+            "runs": 1
+          }
+        }
+      }
+    }
+  },
+  "kind": "Stateful"
+}

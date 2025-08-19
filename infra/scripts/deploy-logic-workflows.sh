@@ -15,8 +15,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 workflows_dir="$repo_root/../ingest-workflow"
-conn_template="$workflows_dir/connections.template.json"
-conn_output="$workflows_dir/connections.json"
+# connections.json now maintained directly; no template copy step required.
 
 load_env() {
   local env_file="$script_dir/.env"
@@ -185,11 +184,6 @@ auto_discover_cosmos_account() {
 }
 
 
-render_connections_file() {
-  echo "[render] Copying template to connections.json"
-  cp "$conn_template" "$conn_output"
-}
-
 package_and_deploy() {
   echo "[package] Creating workflow archive"
   local tmp_zip="$(mktemp -u)/workflows.zip"; mkdir -p "$(dirname "$tmp_zip")"; (cd "$workflows_dir" && zip -qr "$tmp_zip" .)
@@ -301,7 +295,6 @@ main() {
   fi
 
   maybe_temp_network_open
-  render_connections_file
   package_and_deploy
   maybe_temp_network_close
   echo "[done] Logic App workflows deployment finished"

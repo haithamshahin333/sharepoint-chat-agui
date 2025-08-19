@@ -1,0 +1,104 @@
+{
+  "functionConnections": {
+    "azureFunctionOperation": {
+      "authentication": {
+        "name": "Code",
+        "type": "QueryString",
+        "value": "@appsetting('azureFunctionOperation_functionAppKey')"
+      },
+      "displayName": "process_document_to_markdown",
+      "function": {
+        "id": "/subscriptions/@appsetting('SUBSCRIPTION_ID')/resourceGroups/@appsetting('FUNCTION_RESOURCE_GROUP')/providers/Microsoft.Web/sites/@appsetting('FUNCTION_APP_NAME')/functions/process_document_to_markdown"
+      },
+  "triggerUrl": "@appsetting('FUNCTION_APP_HOSTNAME_PROCESS_DOCUMENT')"
+    },
+    "azureFunctionOperation-generate-id": {
+      "authentication": {
+        "name": "Code",
+        "type": "QueryString",
+        "value": "@appsetting('azureFunctionOperation_functionAppKey')"
+      },
+      "displayName": "generate_document_id_endpoint",
+      "function": {
+        "id": "/subscriptions/@appsetting('SUBSCRIPTION_ID')/resourceGroups/@appsetting('FUNCTION_RESOURCE_GROUP')/providers/Microsoft.Web/sites/@appsetting('FUNCTION_APP_NAME')/functions/generate_document_id_endpoint"
+      },
+  "triggerUrl": "@appsetting('FUNCTION_APP_HOSTNAME_GENERATE_DOCUMENT_ID')"
+    },
+    "azureFunctionOperation-index": {
+      "authentication": {
+        "name": "Code",
+        "type": "QueryString",
+        "value": "@appsetting('azureFunctionOperation_functionAppKey')"
+      },
+      "displayName": "index_documents",
+      "function": {
+        "id": "/subscriptions/@appsetting('SUBSCRIPTION_ID')/resourceGroups/@appsetting('FUNCTION_RESOURCE_GROUP')/providers/Microsoft.Web/sites/@appsetting('FUNCTION_APP_NAME')/functions/index_documents"
+      },
+  "triggerUrl": "@appsetting('FUNCTION_APP_HOSTNAME_INDEX_DOCUMENTS')"
+    }
+  },
+  "managedApiConnections": {
+    "sharepointonline": {
+      "api": {
+        "id": "/subscriptions/@appsetting('SUBSCRIPTION_ID')/providers/Microsoft.Web/locations/@appsetting('LOCATION')/managedApis/sharepointonline"
+      },
+      "authentication": {
+        "type": "ManagedServiceIdentity"
+      },
+      "connection": {
+        "id": "/subscriptions/@appsetting('SUBSCRIPTION_ID')/resourceGroups/@appsetting('SHAREPOINT_CONNECTION_RG')/providers/Microsoft.Web/connections/@appsetting('SHAREPOINT_CONNECTION_NAME')"
+      },
+      "connectionRuntimeUrl": "@appsetting('SHAREPOINT_CONNECTION_RUNTIME_URL')"
+    }
+  },
+  "serviceProviderConnections": {
+    "AzureBlob": {
+      "displayName": "AzureBlob-1",
+      "parameterSetName": "ManagedServiceIdentity",
+      "parameterValues": {
+        "authProvider": {
+          "Type": "ManagedServiceIdentity"
+        },
+        "blobStorageEndpoint": "@appsetting('AzureBlob_blobStorageEndpoint')"
+      },
+      "serviceProvider": {
+        "id": "/serviceProviders/AzureBlob"
+      }
+    },
+    "AzureCosmosDB": {
+      "displayName": "new_conn_daf8b",
+      "parameterValues": {
+        "connectionString": "@appsetting('AzureCosmosDB_connectionString')"
+      },
+      "serviceProvider": {
+        "id": "/serviceProviders/AzureCosmosDB"
+      }
+    },
+    "openai": {
+      "displayName": "new_conn_9edeb",
+      "parameterSetName": "ManagedServiceIdentity",
+      "parameterValues": {
+        "authProvider": {
+          "Type": "ManagedServiceIdentity"
+        },
+        "openAIEndpoint": "@appsetting('openai_openAIEndpoint')"
+      },
+      "serviceProvider": {
+        "id": "/serviceProviders/openai"
+      }
+    },
+    "azureaisearch": {
+      "displayName": "azureaisearchconnname",
+      "parameterSetName": "ManagedServiceIdentity",
+      "parameterValues": {
+        "authProvider": {
+          "Type": "ManagedServiceIdentity"
+        },
+        "searchServiceEndpoint": "@appsetting('azureaisearch_searchServiceEndpoint')"
+      },
+      "serviceProvider": {
+        "id": "/serviceProviders/azureaisearch"
+      }
+    }
+  }
+}
