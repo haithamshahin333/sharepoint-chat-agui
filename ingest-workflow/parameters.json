@@ -32,6 +32,10 @@
     "type": "String",
     "value": "https://ORG.sharepoint.com/sites/SITENAME"
   },
+  "sharepoint_document_topfolder": {
+        "type": "String",
+        "value": "Shared Documents"
+  },
   "storage_account_name": {
     "type": "String",
     "value": "STGNAME"
