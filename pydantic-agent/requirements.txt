@@ -1,0 +1,9 @@
+fastapi[standard]
+pydantic-ai-slim[ag-ui,openai,logfire]
+azure-identity
+python-dotenv
+azure-search-documents
+azure-storage-blob
+azure-core
+aiohttp
+opentelemetry-instrumentation-httpx
