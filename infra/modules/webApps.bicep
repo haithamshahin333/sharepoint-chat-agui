@@ -110,13 +110,20 @@ var stgName = length(stgParts) > 8 ? stgParts[8] : ''
 var seaParts = split(searchServiceResourceId, '/')
 var seaName = length(seaParts) > 8 ? seaParts[8] : ''
 
+// OpenAI ID hardened parsing (avoid silent fallback to current RG)
+// Expected full ID pattern segments (index: value):
+// 1: subscriptions, 3: resourceGroups, 5: providers, 6: Microsoft.CognitiveServices, 7: accounts
 var oaiParts = split(openAiAccountResourceId, '/')
-var oaiName = length(oaiParts) > 8 ? oaiParts[8] : ''
+var oaiValid = !empty(openAiAccountResourceId) && length(oaiParts) > 8 && toLower(oaiParts[1]) == 'subscriptions' && toLower(oaiParts[3]) == 'resourcegroups' && toLower(oaiParts[5]) == 'providers' && toLower(oaiParts[6]) == 'microsoft.cognitiveservices' && toLower(oaiParts[7]) == 'accounts' && !empty(oaiParts[8])
+var oaiSubId = oaiValid ? oaiParts[2] : ''
+var oaiRg = oaiValid ? oaiParts[4] : ''
+var oaiName = oaiValid ? oaiParts[8] : ''
 
-// Helper to get RG scope for a resource ID; when empty or same-RG, falls back to current RG
+// Helper to get RG scope for a resource ID; when empty or same-RG, falls back to current RG (storage/search)
 var stgScope = (!empty(storageAccountResourceId) && length(stgParts) > 4) ? resourceGroup(stgParts[2], stgParts[4]) : resourceGroup()
 var seaScope = (!empty(searchServiceResourceId) && length(seaParts) > 4) ? resourceGroup(seaParts[2], seaParts[4]) : resourceGroup()
-var oaiScope = (!empty(openAiAccountResourceId) && length(oaiParts) > 4) ? resourceGroup(oaiParts[2], oaiParts[4]) : resourceGroup()
+// For OpenAI we always produce a resourceGroup object (type requirement), but gate assignment on oaiValid so fallback scope is never used to attempt cross-RG assignment incorrectly.
+var oaiScope = resourceGroup(oaiValid ? oaiSubId : subscription().subscriptionId, oaiValid ? oaiRg : resourceGroup().name)
 
 // Assign Storage Blob Data Reader at the storage account resource scope via cross-RG module
 module raStorageBlobReader 'rbac/assignRole.storage.bicep' = if (!empty(storageAccountResourceId) && createStorageRoleAssignment) {
@@ -141,8 +148,8 @@ module raSearchReader 'rbac/assignRole.search.bicep' = if (!empty(searchServiceR
 }
 
 // Assign OpenAI User via cross-RG module
-module raOpenAIUser 'rbac/assignRole.openai.bicep' = if (!empty(openAiAccountResourceId) && createOpenAiRoleAssignment) {
-  name: 'ra-oai-${uniqueString(oaiParts[2], oaiParts[4], oaiName, webPy.name)}'
+module raOpenAIUser 'rbac/assignRole.openai.bicep' = if (oaiValid && createOpenAiRoleAssignment) {
+  name: 'ra-oai-${uniqueString(oaiSubId, oaiRg, oaiName, webPy.name)}'
   scope: oaiScope
   params: {
     openAiAccountName: oaiName
@@ -239,3 +246,8 @@ output webPythonAppId string = webPy.id
 
 @description('Next.js Web App resource ID')
 output webNextAppId string = webNext.id
+
+@description('Indicates whether the OpenAI role assignment was attempted (true) or skipped due to invalid/missing ID or toggle (false).')
+output openAiRoleAssignmentAttempted bool = oaiValid && createOpenAiRoleAssignment
+@description('Indicates the OpenAI resource ID was considered valid for role assignment logic.')
+output openAiResourceIdValid bool = oaiValid

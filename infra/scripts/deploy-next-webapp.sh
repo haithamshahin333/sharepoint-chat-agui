@@ -145,6 +145,7 @@ add_or_update_setting "PYDANTIC_AGENT_URL" "${PYDANTIC_AGENT_URL:-}"
 add_or_update_setting "NEXT_PUBLIC_SEARCH_CATEGORIES" "${NEXT_PUBLIC_SEARCH_CATEGORIES:-}"
 add_or_update_setting "NEXT_PUBLIC_DEFAULT_CATEGORY" "${NEXT_PUBLIC_DEFAULT_CATEGORY:-}"
 add_or_update_setting "COPILOTKIT_TELEMETRY_DISABLED" "${COPILOTKIT_TELEMETRY_DISABLED:-}"
+add_or_update_setting "NEXT_TELEMETRY_DISABLED" "${NEXT_TELEMETRY_DISABLED:-}"
 add_or_update_setting "POST_BUILD_COMMAND" "${POST_BUILD_COMMAND:-}"
 
 if (( ${#to_set[@]} > 0 )); then

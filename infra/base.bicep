@@ -556,6 +556,20 @@ module solutionStorage 'modules/solutionStorage.bicep' = if (deploySolutionStora
 // RBAC
 // ------------------------------------------------------------
 var roleIdBlobDataContributor = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+// Hold search MI principalId only when search is deployed (avoid direct module output dereference in conditional context)
+var searchManagedIdentityPrincipalId = deploySearch ? search.outputs.systemAssignedMIPrincipalId : ''
+// Intermediate variable for search managed identity principalId (avoid direct nullable module output access)
+
+// Grant Azure AI Search managed identity permission to call Azure OpenAI (embeddings/inference)
+// Cognitive Services OpenAI User role ID: 5e0bd9bd-7b93-4f28-af87-19fc36ad61bd (least privilege for inference)
+module searchOpenAIUserRA 'modules/assignSearchOpenAIUserRole.bicep' = if (deploySearch && !empty(openAIResourceId)) {
+  name: 'ra-srch-oai-user-${uniqueString(resourceGroup().id, effectiveSearchServiceName, deploymentInstance)}'
+  scope: resourceGroup(oaiSubId, oaiRg)
+  params: {
+    openAIAccountName: oaiName
+  searchPrincipalId: searchManagedIdentityPrincipalId
+  }
+}
 
 // Deterministic Solution Storage account name (must match module derivation logic)
 var solStgName = 'st${toLower(take(replace(replace(resourceGroup().name, '-', ''), '_', ''), 12))}${take(uniqueString(resourceGroup().id, subscription().subscriptionId), 8)}'

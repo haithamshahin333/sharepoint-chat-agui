@@ -36,8 +36,6 @@ param sku string = 'S0'
 @description('Tags to apply')
 param tags object = {}
 
-// Custom subdomain required for some cognitive services when using private endpoints
-var customSubDomainName = toLower('${name}-${take(uniqueString(resourceGroup().id, name), 8)}')
 
 // Optionally create Private DNS zone and VNet link using AVM
 module dns 'br/public:avm/res/network/private-dns-zone:0.7.0' = if (createDnsZone && empty(cognitiveServicesPrivateDnsZoneId)) {
@@ -66,9 +64,10 @@ module documentIntelligence 'br/public:avm/res/cognitive-services/account:0.13.0
     kind: 'FormRecognizer'
     sku: sku
     tags: tags
+  // Re-introduced: ensure CustomSubDomainName exists (using same value as account name for consistency)
+  customSubDomainName: name
 
     // Networking and security
-    customSubDomainName: customSubDomainName
     publicNetworkAccess: 'Disabled'
     disableLocalAuth: false
     restrictOutboundNetworkAccess: true
@@ -102,5 +101,5 @@ output resourceId string = documentIntelligence.outputs.resourceId
 output name string = documentIntelligence.outputs.name
 output endpoint string = documentIntelligence.outputs.endpoint
 output systemAssignedMIPrincipalId string = documentIntelligence.outputs.systemAssignedMIPrincipalId!
-output customSubDomainName string = customSubDomainName
-output privateEndpointFqdn string = '${customSubDomainName}.privatelink.cognitiveservices.azure.com'
+// Private endpoint FQDN will resolve via standard pattern using the resource name
+output privateEndpointFqdn string = '${name}.privatelink.cognitiveservices.azure.com'
