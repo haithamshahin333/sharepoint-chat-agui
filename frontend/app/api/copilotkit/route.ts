@@ -34,10 +34,53 @@ export const POST = async (req: NextRequest) => {
   });
 
   const { handleRequest } = copilotRuntimeNextJSAppRouterEndpoint({
-    runtime: authenticatedRuntime, 
+    runtime: authenticatedRuntime,
     serviceAdapter,
     endpoint: "/api/copilotkit",
   });
- 
-  return handleRequest(req);
+
+  // Intercept the streamed response to log every chunk
+  const response = await handleRequest(req);
+  if (!response.body) {
+    // Not a streamed response, just return as is
+    return response;
+  }
+
+  // Wrap the ReadableStream to log every chunk
+  const loggedStream = new ReadableStream({
+    start(controller) {
+      if (!response.body) {
+        controller.close();
+        return;
+      }
+      const reader = response.body.getReader();
+      function push() {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            controller.close();
+            return;
+          }
+          // Log the chunk (as string, fallback to hex if not UTF-8), with timestamp
+          const ts = new Date().toISOString();
+          try {
+            const text = new TextDecoder("utf-8").decode(value);
+            console.log(`[api/copilotkit] [${ts}] Streamed chunk:`, text);
+          } catch {
+            console.log(`[api/copilotkit] [${ts}] Streamed chunk (binary):`, value);
+          }
+          controller.enqueue(value);
+          push();
+        });
+      }
+      push();
+    }
+  });
+
+  // Copy headers/status from original response
+  const loggedResponse = new Response(loggedStream, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+  return loggedResponse;
 };
