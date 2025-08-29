@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+import logging
 import json
 from starlette.requests import Request
 from starlette.responses import Response
@@ -18,6 +19,9 @@ logfire.configure(send_to_logfire=False)
 logfire.instrument_pydantic_ai()
 logfire.instrument_httpx(capture_all=True)
 
+# Use uvicorn's configured logger so messages appear in dev/server logs
+logger = logging.getLogger("uvicorn.error")
+
 # Create agent and blob service client
 agent = create_search_agent()
 
@@ -30,8 +34,10 @@ app = FastAPI()
 
 @app.post("/")
 async def root(request: Request) -> Response:
-    # Debug: Log Authorization header
-    # print(f"🔍 Authorization header: {request.headers.get('authorization', 'NOT FOUND')}")
+    # Log inbound request headers (with sensitive values redacted)
+    headers = {k: v for k, v in request.headers.items()}
+    redacted = {k: ("[REDACTED]" if k.lower() in {"authorization", "cookie"} else v) for k, v in headers.items()}
+    logger.info("Inbound request headers: %s", redacted)
     
     body = await request.body()
     run_input = RunAgentInput.model_validate_json(body)
