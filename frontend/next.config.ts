@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Produce a self-contained server with minimal node_modules under .next/standalone
-  output: "standalone",
+  // Default Next.js server output; App Service will run "next start" via PM2.
 };
 
 export default nextConfig;

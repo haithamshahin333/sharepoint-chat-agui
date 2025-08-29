@@ -195,6 +195,13 @@ az webapp deploy \
 
 rm -f "$zip_path"; rmdir "$tmpdir" || true
 
+# Ensure startup uses PM2 to run Next in production (idempotent)
+echo "Setting startup command to PM2 Runtime (npm start)"
+az webapp config set \
+  --resource-group "$WEBAPP_RESOURCE_GROUP" \
+  --name "$WEBAPP_NAME" \
+  --startup-file "pm2-runtime start npm --name next -- start" 1>/dev/null || true
+
 # 5) Disable public access after successful deployment (non-fatal if this step hiccups)
 set +e
 echo "Disabling public network access for Web App '$WEBAPP_NAME'"
