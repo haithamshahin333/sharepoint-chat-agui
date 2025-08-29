@@ -181,7 +181,7 @@ async def perform_search(ctx: RunContext[RequestContext], query: str) -> str:
 
     # Fixed 3 second sleep before executing the search to Azure
     import asyncio
-    await asyncio.sleep(3)
+    await asyncio.sleep(10)
 
     # Validate Azure AI Search configuration
     if not AZURE_SEARCH_ENDPOINT:
