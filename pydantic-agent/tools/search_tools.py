@@ -178,14 +178,18 @@ async def perform_search(ctx: RunContext[RequestContext], query: str) -> str:
     # Extract category from context, defaulting to DEFAULT_CATEGORY_VALUE for generic search
     category = ctx.deps.forwarded_props.get('threadMetadata', {}).get('category', DEFAULT_CATEGORY_VALUE)
     logger.info("Searching: query='%s', category='%s'", query, category)
-    
+
+    # Fixed 3 second sleep before executing the search to Azure
+    import asyncio
+    await asyncio.sleep(3)
+
     # Validate Azure AI Search configuration
     if not AZURE_SEARCH_ENDPOINT:
         logger.error("Azure AI Search not configured. AZURE_SEARCH_ENDPOINT environment variable not set.")
         raise ValueError("Azure AI Search not configured. Check AZURE_SEARCH_ENDPOINT environment variable.")
-    
+
     logger.debug("Azure AI Search configuration validated")
-    
+
     result = await _perform_hybrid_semantic_search(query, category)
     logger.debug("Search completed. Result length: %d", len(result))
     return result
