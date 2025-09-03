@@ -13,3 +13,7 @@ class Config:
     
     # Azure Storage settings
     AZURE_STORAGE_ACCOUNT_NAME = os.getenv('AZURE_STORAGE_ACCOUNT_NAME')
+
+    # Microsoft Entra (Azure AD) token validation settings
+    ENTRA_TENANT_ID = os.getenv('ENTRA_TENANT_ID')  # Required
+    ENTRA_AUDIENCE = os.getenv('ENTRA_AUDIENCE')    # e.g., api://<client-id> or the app's client ID

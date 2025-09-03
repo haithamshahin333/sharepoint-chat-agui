@@ -7,3 +7,4 @@ azure-storage-blob
 azure-core
 aiohttp
 opentelemetry-instrumentation-httpx
+PyJWT[crypto]

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CopilotChat } from "@copilotkit/react-ui";
 import {
   useCopilotAction,
@@ -11,13 +11,72 @@ import { TextMessage, Role } from "@copilotkit/runtime-client-gql";
 import { useCategoryContext } from "./components/AuthenticatedCopilotProvider";
 import { useMarkdownRenderers } from "./components/MarkdownRenderers";
 import { getCategoryConfig } from "./lib/categoryConfig";
+import { useAuth } from "./hooks/useAuth";
+import ExpandableResult from "./components/ExpandableResult";
 
 const PDFModal = ({ url, isOpen, onClose }: { url: string; isOpen: boolean; onClose: () => void }) => {
+  const { getAccessToken } = useAuth();
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fragment, setFragment] = useState<string>("");
+
+  useEffect(() => {
+    if (!isOpen || !url) return;
+
+    let cancelled = false;
+    let currentBlobUrl: string | null = null;
+
+    async function loadPdf() {
+      setLoading(true);
+      setError(null);
+      setBlobUrl(null);
+
+      try {
+        // Keep any hash fragment like #page=17 to apply after blob URL is created
+        try {
+          const hashIdx = url.indexOf('#');
+          setFragment(hashIdx >= 0 ? url.substring(hashIdx) : "");
+        } catch {}
+
+        const token = await getAccessToken();
+        if (!token) throw new Error("Not authenticated");
+
+        const resp = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/pdf",
+          },
+        });
+
+        if (!resp.ok) {
+          throw new Error(`Failed to load PDF (${resp.status})`);
+        }
+
+        const blob = await resp.blob();
+  currentBlobUrl = URL.createObjectURL(blob);
+        if (!cancelled) setBlobUrl(currentBlobUrl);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Failed to load PDF";
+        if (!cancelled) setError(msg);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadPdf();
+
+    return () => {
+      cancelled = true;
+      if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+    };
+  }, [isOpen, url, getAccessToken]);
+
   if (!isOpen) return null;
-  
-  // Debug log for PDF URL
+
+  // Debug log for PDF URL (source endpoint)
   console.log('PDFModal - Loading PDF URL:', url);
-  
+
   return (
     <div className="flex flex-col h-full w-full bg-white border-l border-gray-200">
       {/* Header with close button and title */}
@@ -36,11 +95,19 @@ const PDFModal = ({ url, isOpen, onClose }: { url: string; isOpen: boolean; onCl
       
       {/* PDF iframe container */}
       <div className="flex-1 overflow-hidden">
-        <iframe 
-          src={url} 
-          className="w-full h-full border-0"
-          title="PDF Document"
-        />
+        {loading && (
+          <div className="p-4 text-sm text-gray-600">Loading PDF…</div>
+        )}
+        {error && (
+          <div className="p-4 text-sm text-red-600">{error}</div>
+        )}
+    {blobUrl && (
+          <iframe 
+      src={`${blobUrl}${fragment}`}
+            className="w-full h-full border-0"
+            title="PDF Document"
+          />
+        )}
       </div>
     </div>
   );
@@ -131,16 +198,13 @@ const Chat = () => {
           {/* Result - only shown when complete */}
           {status === "complete" && result && (
             <div className="mt-2">
-              <h3 className="text-xs font-medium text-gray-600">Response:</h3>
-              <pre className="mt-1 text-xs overflow-auto bg-blue-50 p-2 rounded">
-                {typeof result === 'string' ? result : JSON.stringify(result, null, 2)}
-              </pre>
+              <ExpandableResult result={result} />
             </div>
           )}
           
           {status === "complete" && (
             <div className="mt-2 text-xs text-green-600">✓ Complete</div>
-          )}``
+          )}
         </div>
       );
     },

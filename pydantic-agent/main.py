@@ -1,9 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
 import json
-from starlette.requests import Request
 from starlette.responses import Response
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+import os
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob.aio import BlobServiceClient
 
@@ -13,6 +16,9 @@ from models.request_context import RequestContext
 from agents.search_agent import create_search_agent
 from config import Config
 import logfire
+import jwt
+from jwt import PyJWKClient
+from functools import lru_cache
 
 # Configure Logfire for telemetry
 logfire.configure(send_to_logfire=False)
@@ -32,6 +38,81 @@ blob_service_client = BlobServiceClient(
 
 app = FastAPI()
 
+# CORS configuration to allow Authorization header from the frontend
+frontend_origins = os.getenv("FRONTEND_ORIGINS")
+allowed_origins = [o.strip() for o in frontend_origins.split(",") if o.strip()] if frontend_origins else [
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Health check (public)
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok"}
+
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+@lru_cache(maxsize=1)
+def _jwks_client() -> PyJWKClient:
+    if not Config.ENTRA_TENANT_ID:
+        raise RuntimeError("ENTRA_TENANT_ID is not configured")
+    jwks_url = f"https://login.microsoftonline.com/{Config.ENTRA_TENANT_ID}/discovery/v2.0/keys"
+    return PyJWKClient(jwks_url)
+
+def _validate_token(token: str):
+    if not Config.ENTRA_AUDIENCE:
+        raise RuntimeError("ENTRA_AUDIENCE is not configured")
+    jwks_client = _jwks_client()
+    signing_key = jwks_client.get_signing_key_from_jwt(token)
+    # Validate standard claims; issuer format for v2 endpoint
+    issuer = f"https://login.microsoftonline.com/{Config.ENTRA_TENANT_ID}/v2.0"
+    decoded = jwt.decode(
+        token,
+        signing_key.key,
+        algorithms=["RS256"],
+        audience=Config.ENTRA_AUDIENCE,
+        issuer=issuer,
+        options={"require": ["exp", "iss", "aud"]},
+    )
+    return decoded
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    # Skip public endpoints
+    if request.method == "OPTIONS" or request.url.path == "/healthz":
+        return await call_next(request)
+
+    credentials: HTTPAuthorizationCredentials | None = await bearer_scheme(request)
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Missing or invalid authorization header"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token = credentials.credentials
+    try:
+        claims = _validate_token(token)
+        # Attach claims to request state if needed downstream
+        request.state.user_claims = claims
+    except Exception as e:
+        logger.warning("Token validation failed: %s", e)
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Invalid or expired token"},
+            headers={"WWW-Authenticate": "Bearer error=invalid_token"},
+        )
+
+    return await call_next(request)
+
 @app.post("/")
 async def root(request: Request) -> Response:
     # Log inbound request headers (with sensitive values redacted)
@@ -49,7 +130,7 @@ async def root(request: Request) -> Response:
     accept = request.headers.get('accept', SSE_CONTENT_TYPE)
     event_stream = run_ag_ui(agent, run_input, accept=accept, deps=deps)
     
-    return StreamingResponse(event_stream, media_type=accept)
+    return StreamingResponse(event_stream, media_type=SSE_CONTENT_TYPE)
 
 @app.get("/download/{blob_path:path}")
 async def download_blob(blob_path: str):
