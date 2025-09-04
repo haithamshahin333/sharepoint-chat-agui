@@ -121,8 +121,8 @@ async def _convert_search_results_to_json(search_results, query: str, category: 
             path = parsed.path.lstrip('/')  # container/blob/path
             if not path or '/' not in path:
                 return ""
-            api_hostname = os.getenv('API_HOSTNAME', 'http://localhost:8000').rstrip('/')
-            base_url = f"{api_hostname}/download/{path}"
+            # api_hostname = os.getenv('API_HOSTNAME', 'http://localhost:8000').rstrip('/')
+            base_url = f"/api/download/{path}"
             if page_number is not None and str(page_number).strip():
                 base_url += f"#page={page_number}"
             return base_url
@@ -180,8 +180,8 @@ async def perform_search(ctx: RunContext[RequestContext], query: str) -> str:
     logger.info("Searching: query='%s', category='%s'", query, category)
 
     # Fixed 3 second sleep before executing the search to Azure
-    import asyncio
-    await asyncio.sleep(10)
+    # import asyncio
+    # await asyncio.sleep(10)
 
     # Validate Azure AI Search configuration
     if not AZURE_SEARCH_ENDPOINT:
