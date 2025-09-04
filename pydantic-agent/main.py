@@ -132,7 +132,7 @@ async def root(request: Request) -> Response:
     
     return StreamingResponse(event_stream, media_type=SSE_CONTENT_TYPE)
 
-@app.get("/download/{blob_path:path}")
+@app.get("/api/download/{blob_path:path}")
 async def download_blob(blob_path: str):
     """Proxy download a blob from Azure Storage for iframe display"""
     if not blob_service_client:
